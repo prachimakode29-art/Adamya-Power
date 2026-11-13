@@ -1,0 +1,6 @@
+{
+  "name": "Adamya Power & Industrial Solutions",
+  "description": "Premium engineering services for civil, electrical, and mechanical work.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

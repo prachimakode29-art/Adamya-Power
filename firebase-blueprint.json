@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "StaffRole": {
+      "title": "StaffRole",
+      "description": "Authorized admin or co-admin account permitted to access the private Leads & Quotations portal.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 160,
+          "description": "Lowercase Google account email address of the admin or co-admin."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "coadmin"],
+          "description": "Access level granted to the user."
+        },
+        "addedBy": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Email of the admin who granted this role."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the role was created."
+        }
+      },
+      "required": ["email", "role", "addedBy", "createdAt"]
+    },
+    "ClientEnquiry": {
+      "title": "ClientEnquiry",
+      "description": "Client service enquiry captured from the public quote form, Gmail, WhatsApp, Excel, or Google Sheets.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique enquiry identifier."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Client full name or company name."
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Client email address."
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Client phone or WhatsApp number."
+        },
+        "service": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Requested service category."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Project requirements and enquiry details."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["Website", "Gmail", "WhatsApp", "Excel", "Google Sheet"],
+          "description": "Origin channel of the enquiry."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["New", "Quoted (Gmail)", "Quoted (WhatsApp)", "Follow-up", "Approved"],
+          "description": "Current workflow status."
+        },
+        "gmailMessageId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional Gmail message identifier for deduplication."
+        },
+        "quotation": {
+          "type": "object",
+          "description": "Optional quotation details prepared by admin or co-admin."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when enquiry was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when enquiry was last updated."
+        }
+      },
+      "required": ["id", "name", "email", "phone", "service", "message", "source", "status", "createdAt"]
+    },
+    "SheetsConfig": {
+      "title": "SheetsConfig",
+      "description": "Shared Google Sheets sync configuration for admin and co-admin.",
+      "type": "object",
+      "properties": {
+        "spreadsheetId": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Connected Google Spreadsheet ID."
+        },
+        "spreadsheetUrl": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Connected Google Spreadsheet URL."
+        },
+        "updatedBy": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Email of the staff member who updated the sheet link."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last update."
+        }
+      },
+      "required": ["spreadsheetId", "updatedBy", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/staffRoles/{emailId}": {
+      "schema": { "$ref": "#/entities/StaffRole" },
+      "description": "Stores authorized Co-Admin and Admin accounts keyed by lowercase email."
+    },
+    "/enquiries/{enquiryId}": {
+      "schema": { "$ref": "#/entities/ClientEnquiry" },
+      "description": "Stores client enquiries and quotations. Public users may only create Website enquiries; only Admin and Co-Admin can read, update, or delete."
+    },
+    "/appConfig/{configId}": {
+      "schema": { "$ref": "#/entities/SheetsConfig" },
+      "description": "Stores shared workspace configuration such as connected Google Sheet ID for Admin and Co-Admin."
+    }
+  }
+}

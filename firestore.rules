@@ -1,0 +1,165 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidEmailId(emailId) {
+      return emailId is string &&
+        emailId.size() >= 5 &&
+        emailId.size() <= 160 &&
+        emailId.matches('^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    function isSuperAdmin() {
+      return isVerifiedUser() &&
+        request.auth.token.email is string &&
+        (request.auth.token.email.lower() == 'prachimakode29@gmail.com' ||
+         request.auth.token.email.lower() == 'adamyapower@gmail.com');
+    }
+
+    function isCoAdmin() {
+      return isVerifiedUser() &&
+        request.auth.token.email is string &&
+        exists(/databases/$(database)/documents/staffRoles/$(request.auth.token.email.lower()));
+    }
+
+    function isStaff() {
+      return isSuperAdmin() || isCoAdmin();
+    }
+
+    function isValidStaffRole(data, emailId) {
+      return data.keys().hasAll(['email', 'role', 'addedBy', 'createdAt']) &&
+        data.keys().hasOnly(['email', 'role', 'addedBy', 'createdAt']) &&
+        data.email is string &&
+        data.email.size() >= 5 &&
+        data.email.size() <= 160 &&
+        data.email.lower() == emailId.lower() &&
+        data.role in ['admin', 'coadmin'] &&
+        data.addedBy is string &&
+        data.addedBy.size() >= 5 &&
+        data.addedBy.size() <= 160 &&
+        data.createdAt == request.time;
+    }
+
+    function isValidQuotation(q) {
+      return q is map &&
+        q.keys().hasAll(['quoteNumber', 'quoteDate', 'validUntil', 'serviceCategory', 'items', 'gstPercent', 'notes', 'subtotal', 'gstAmount', 'totalAmount']) &&
+        q.keys().hasOnly(['quoteNumber', 'quoteDate', 'validUntil', 'serviceCategory', 'items', 'gstPercent', 'notes', 'subtotal', 'gstAmount', 'totalAmount', 'sentVia', 'sentAt']) &&
+        q.quoteNumber is string && q.quoteNumber.size() >= 1 && q.quoteNumber.size() <= 60 &&
+        q.quoteDate is string && q.quoteDate.size() >= 4 && q.quoteDate.size() <= 30 &&
+        q.validUntil is string && q.validUntil.size() >= 4 && q.validUntil.size() <= 30 &&
+        q.serviceCategory is string && q.serviceCategory.size() >= 1 && q.serviceCategory.size() <= 80 &&
+        q.items is list && q.items.size() >= 1 && q.items.size() <= 50 && q.items[0] is map &&
+        q.gstPercent is number && q.gstPercent >= 0 && q.gstPercent <= 28 &&
+        q.notes is string && q.notes.size() <= 2000 &&
+        q.subtotal is number && q.subtotal >= 0 &&
+        q.gstAmount is number && q.gstAmount >= 0 &&
+        q.totalAmount is number && q.totalAmount >= 0 &&
+        (!('sentVia' in q) || q.sentVia in ['Gmail', 'WhatsApp', 'Draft']) &&
+        (!('sentAt' in q) || (q.sentAt is string && q.sentAt.size() <= 60));
+    }
+
+    function isValidEnquiry(data, docId) {
+      return data.keys().hasAll(['id', 'name', 'email', 'phone', 'service', 'message', 'source', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'name', 'email', 'phone', 'service', 'message', 'source', 'status', 'gmailMessageId', 'quotation', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id == docId && isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.email is string && data.email.size() <= 160 &&
+        data.phone is string && data.phone.size() <= 40 &&
+        data['service'] is string && data['service'].size() >= 1 && data['service'].size() <= 80 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 2000 &&
+        data.source in ['Website', 'Gmail', 'WhatsApp', 'Excel', 'Google Sheet'] &&
+        data.status in ['New', 'Quoted (Gmail)', 'Quoted (WhatsApp)', 'Follow-up', 'Approved'] &&
+        (!('gmailMessageId' in data) || (data.gmailMessageId is string && data.gmailMessageId.size() <= 128)) &&
+        (!('quotation' in data) || isValidQuotation(data.quotation)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPublicEnquiryCreate(data, docId) {
+      return isValidEnquiry(data, docId) &&
+        data.source == 'Website' &&
+        data.status == 'New' &&
+        !('quotation' in data) &&
+        !('gmailMessageId' in data) &&
+        data.createdAt == request.time;
+    }
+
+    function isValidSheetsConfig(data) {
+      return data.keys().hasAll(['spreadsheetId', 'updatedBy', 'updatedAt']) &&
+        data.keys().hasOnly(['spreadsheetId', 'spreadsheetUrl', 'updatedBy', 'updatedAt']) &&
+        data.spreadsheetId is string && data.spreadsheetId.size() >= 1 && data.spreadsheetId.size() <= 200 &&
+        (!('spreadsheetUrl' in data) || (data.spreadsheetUrl is string && data.spreadsheetUrl.size() <= 400)) &&
+        data.updatedBy is string && data.updatedBy.size() >= 5 && data.updatedBy.size() <= 160 &&
+        data.updatedAt == request.time;
+    }
+
+    // Staff roles: Super admins manage co-admins; verified user can read only their own role doc
+    match /staffRoles/{emailId} {
+      allow get: if isValidEmailId(emailId) &&
+        (isSuperAdmin() ||
+         (isVerifiedUser() && request.auth.token.email is string && request.auth.token.email.lower() == emailId.lower()));
+      allow list: if isSuperAdmin();
+      allow create: if isValidEmailId(emailId) &&
+        isSuperAdmin() &&
+        isValidStaffRole(incoming(), emailId);
+      allow update: if isValidEmailId(emailId) &&
+        isSuperAdmin() &&
+        isValidStaffRole(incoming(), emailId) &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isValidEmailId(emailId) && isSuperAdmin();
+    }
+
+    // Client enquiries: Public visitors can submit Website enquiries; ONLY Admin & Co-Admin can read/manage
+    match /enquiries/{enquiryId} {
+      allow get: if isValidId(enquiryId) && isStaff();
+      allow list: if isStaff();
+      allow create: if isValidId(enquiryId) && (
+        isValidPublicEnquiryCreate(incoming(), enquiryId) ||
+        (isStaff() && isValidEnquiry(incoming(), enquiryId) && incoming().createdAt == request.time)
+      );
+      allow update: if isValidId(enquiryId) &&
+        isStaff() &&
+        isValidEnquiry(incoming(), enquiryId) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'phone', 'service', 'message', 'status', 'quotation', 'updatedAt']);
+      allow delete: if isValidId(enquiryId) && isStaff();
+    }
+
+    // Shared Google Sheet configuration: Admin & Co-Admin only
+    match /appConfig/{configId} {
+      allow get: if isValidId(configId) && isStaff();
+      allow list: if isStaff();
+      allow create, update: if isValidId(configId) &&
+        isStaff() &&
+        isValidSheetsConfig(incoming());
+      allow delete: if isValidId(configId) && isSuperAdmin();
+    }
+  }
+}
